@@ -1,19 +1,24 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 )
 
-type OperatorConfiguration map[string]string
+type OperatorConfiguration map[string]interface{}
 
 func NewOperatorConfiguration() OperatorConfiguration {
-	return make(map[string]string)
+	return make(map[string]interface{})
 }
 
 var configuration = NewOperatorConfiguration()
+
+func (configuration OperatorConfiguration) fromJSON(payload []byte) error {
+	return json.Unmarshal(payload, &configuration)
+}
 
 func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration) {
 	for key, value := range other {
@@ -26,7 +31,10 @@ func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration
 
 func init() {
 	var c1 = NewOperatorConfiguration()
-	c1["a"] = "A"
+	jsonStr := `{"a":[],"foo":"FOO1","bar":"BAR1"}`
+	c1.fromJSON([]byte(jsonStr))
+
+	c1["a"] = []int{1, 2, 3}
 	c1["foo"] = "FOO"
 	c1["bar"] = "BAR"
 
@@ -36,7 +44,9 @@ func init() {
 	c2["bar"] = "BAR2"
 
 	c1.mergeWith(c2)
-	fmt.Println(c1)
+	for key, val := range c1 {
+		fmt.Println(key, val)
+	}
 }
 
 func main() {
