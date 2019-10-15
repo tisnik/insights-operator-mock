@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 )
 
 type OperatorConfiguration map[string]interface{}
@@ -29,39 +30,36 @@ func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration
 	}
 }
 
-func init() {
-	var c1 = NewOperatorConfiguration()
-	jsonStr := `{"a":[],"foo":"FOO1","bar":"BAR1"}`
-	c1.fromJSON([]byte(jsonStr))
-
-	c1["a"] = []int{1, 2, 3}
-	c1["foo"] = "FOO"
-	c1["bar"] = "BAR"
-
-	var c2 = NewOperatorConfiguration()
-	c2["b"] = "B"
-	c2["foo"] = "FOO2"
-	c2["bar"] = "BAR2"
-
-	c1.mergeWith(c2)
-	for key, val := range c1 {
+func (configuration OperatorConfiguration) print(title string) {
+	fmt.Println(title)
+	for key, val := range configuration {
 		fmt.Println(key, val)
 	}
+	fmt.Println()
 }
 
-func main() {
-	log.Println("Starting the service")
+func createOriginalConfiguration() OperatorConfiguration {
+	var cfg = NewOperatorConfiguration()
+	jsonStr := `
+{"no_op":"?",
+ "foo":"FOO1",
+ "bar":"BAR1",
+ "watch":[]}`
+	cfg.fromJSON([]byte(jsonStr))
+	return cfg
+}
 
-	url := "http://localhost:8080/"
+func retrieveConfigurationFrom(url string, cluster string) OperatorConfiguration {
+	log.Println("Retrieving configuration from the service")
 
-	request, err := http.NewRequest("GET", url, nil)
+	address := url + cluster
 
+	request, err := http.NewRequest("GET", address, nil)
 	if err != nil {
 		log.Println("Error: " + err.Error())
 	}
 
 	response, err := http.DefaultClient.Do(request)
-
 	if err != nil {
 		log.Println("Error: " + err.Error())
 	}
@@ -69,7 +67,22 @@ func main() {
 	defer response.Body.Close()
 	body, _ := ioutil.ReadAll(response.Body)
 
-	fmt.Println(string(body))
+	var c2 = NewOperatorConfiguration()
+	c2.fromJSON(body)
+	return c2
+}
 
-	log.Println("Stopping the service")
+func main() {
+	c1 := createOriginalConfiguration()
+	c1.print("Original configuration")
+
+	for {
+		c2 := retrieveConfigurationFrom("http://localhost:8080/api/v1/operator/configuration/", "cluster0")
+		c2.print("Retrieved configuration")
+
+		c1.mergeWith(c2)
+		c1.print("Updated configuration")
+
+		time.Sleep(5 * time.Second)
+	}
 }
