@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/viper"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -49,19 +50,21 @@ func createOriginalConfiguration() OperatorConfiguration {
 	return cfg
 }
 
-func retrieveConfigurationFrom(url string, cluster string) OperatorConfiguration {
+func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguration, error) {
 	log.Println("Retrieving configuration from the service")
 
-	address := url + cluster
+	address := url + "/api/v1/operator/configuration/" + cluster
 
 	request, err := http.NewRequest("GET", address, nil)
 	if err != nil {
 		log.Println("Error: " + err.Error())
+		return nil, err
 	}
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		log.Println("Error: " + err.Error())
+		return nil, err
 	}
 
 	defer response.Body.Close()
@@ -69,19 +72,30 @@ func retrieveConfigurationFrom(url string, cluster string) OperatorConfiguration
 
 	var c2 = NewOperatorConfiguration()
 	c2.fromJSON(body)
-	return c2
+	return c2, nil
 }
 
 func main() {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(fmt.Errorf("Fatal error config file: %s \n", err))
+	}
+
 	c1 := createOriginalConfiguration()
 	c1.print("Original configuration")
 
 	for {
-		c2 := retrieveConfigurationFrom("http://localhost:8080/api/v1/operator/configuration/", "cluster0")
-		c2.print("Retrieved configuration")
+		c2, err := retrieveConfigurationFrom(viper.GetString("URL"), viper.GetString("cluster"))
+		if err != nil {
+			log.Println("unable to retrieve configuration from the service")
+		} else {
+			c2.print("Retrieved configuration")
 
-		c1.mergeWith(c2)
-		c1.print("Updated configuration")
+			c1.mergeWith(c2)
+			c1.print("Updated configuration")
+		}
 
 		time.Sleep(5 * time.Second)
 	}
