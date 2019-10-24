@@ -117,6 +117,25 @@ func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguratio
 	return c2, nil
 }
 
+func StartInstrumentation(serviceUrl string, interval int, clusterName string) {
+	c1 := createOriginalConfiguration("configuration.json")
+	klog.Info("Read original configuration")
+	c1.print("Original configuration")
+	klog.Info("Gathering configuration each ", interval, " second(s)")
+	for {
+		klog.Info("Gathering info from service ", serviceUrl)
+		c2, err := retrieveConfigurationFrom(serviceUrl, clusterName)
+		if err != nil {
+			klog.Error("unable to retrieve configuration from the service")
+		} else if c2 != nil {
+			c2.print("Retrieved configuration")
+			c1.mergeWith(c2)
+			c1.print("Updated configuration")
+		}
+		time.Sleep(time.Duration(interval) * time.Second)
+	}
+}
+
 func main() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
@@ -124,21 +143,6 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
+	StartInstrumentation(viper.GetString("URL"), viper.GetInt("interval"), viper.GetString("cluster"))
 
-	c1 := createOriginalConfiguration()
-	c1.print("Original configuration")
-
-	for {
-		c2, err := retrieveConfigurationFrom(viper.GetString("URL"), viper.GetString("cluster"))
-		if err != nil {
-			klog.Error("unable to retrieve configuration from the service")
-		} else {
-			c2.print("Retrieved configuration")
-
-			c1.mergeWith(c2)
-			c1.print("Updated configuration")
-		}
-
-		time.Sleep(5 * time.Second)
-	}
 }
