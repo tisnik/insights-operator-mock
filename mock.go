@@ -97,15 +97,23 @@ func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguratio
 		return nil, err
 	}
 
+	if response.StatusCode != http.StatusOK {
+		klog.Info("No configuration has been provided by the service")
+		return nil, nil
+	}
+
 	defer response.Body.Close()
-	body, _ := ioutil.ReadAll(response.Body)
-	klog.Info("************ BODY ***************")
-	klog.Info(response.StatusCode)
-	klog.Info(string(body))
-	klog.Info("************ BODY ***************")
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	var c2 = NewOperatorConfiguration()
-	c2.fromJSON(body)
+	err = c2.fromJSON(body)
+	if err != nil {
+		klog.Warning("Can not decode the configuration provided by the service")
+		return nil, err
+	}
 	return c2, nil
 }
 
