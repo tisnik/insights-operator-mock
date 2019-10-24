@@ -1,3 +1,4 @@
 URL="http://localhost:8080"
 cluster="cluster0"
 interval=5
+configfile="configuration.json"

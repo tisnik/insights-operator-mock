@@ -70,6 +70,11 @@ func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration
 // Print the configuration. Items are sorted by its keys.
 func (configuration OperatorConfiguration) print(title string) {
 	klog.Info(title)
+	if len(configuration) == 0 {
+		klog.Info("\t* empty *")
+		return
+	}
+
 	var keys []string
 	for key, _ := range configuration {
 		keys = append(keys, key)
@@ -82,16 +87,20 @@ func (configuration OperatorConfiguration) print(title string) {
 
 // Create original operator configuration.
 func createOriginalConfiguration(filename string) OperatorConfiguration {
+	var cfg = NewOperatorConfiguration()
+
 	payload, err := ioutil.ReadFile(filename)
 	if err != nil {
-		klog.Fatal(err)
+		klog.Error("Can not open configuration file: ", err)
+		// ok for now, the configuration will be simply empty
+		return cfg
 	}
 
-	var cfg = NewOperatorConfiguration()
 	err = cfg.fromJSON(payload)
 	if err != nil {
 		klog.Warning("Can not decode original configuration read from the file ", filename)
 		// ok for now, the configuration will be simply empty
+		return cfg
 	}
 	return cfg
 }
@@ -131,9 +140,9 @@ func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguratio
 	return c2, nil
 }
 
-func StartInstrumentation(serviceUrl string, interval int, clusterName string) {
-	c1 := createOriginalConfiguration("configuration.json")
+func StartInstrumentation(serviceUrl string, interval int, clusterName string, configFile string) {
 	klog.Info("Read original configuration")
+	c1 := createOriginalConfiguration(configFile)
 	c1.print("Original configuration")
 	klog.Info("Gathering configuration each ", interval, " second(s)")
 	for {
@@ -157,6 +166,6 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
-	StartInstrumentation(viper.GetString("URL"), viper.GetInt("interval"), viper.GetString("cluster"))
+	StartInstrumentation(viper.GetString("URL"), viper.GetInt("interval"), viper.GetString("cluster"), viper.GetString("configfile"))
 
 }
