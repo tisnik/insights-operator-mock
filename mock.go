@@ -20,18 +20,24 @@ import (
 	"fmt"
 	"github.com/spf13/viper"
 	"io/ioutil"
-	"log"
+	"k8s.io/klog"
 	"net/http"
 	"time"
 )
 
+// An unstructured operator configuration that can contain
+// any data stored under (string) keys.
 type OperatorConfiguration map[string]interface{}
 
+// Constructor for the operator configuration.
 func NewOperatorConfiguration() OperatorConfiguration {
 	return make(map[string]interface{})
 }
 
 var configuration = NewOperatorConfiguration()
+
+func init() {
+}
 
 func (configuration OperatorConfiguration) fromJSON(payload []byte) error {
 	return json.Unmarshal(payload, &configuration)
@@ -47,13 +53,14 @@ func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration
 }
 
 func (configuration OperatorConfiguration) print(title string) {
-	fmt.Println(title)
+	klog.Info(title)
 	for key, val := range configuration {
-		fmt.Println(key, val)
+		klog.Info(key, "\t", val)
 	}
 	fmt.Println()
 }
 
+// Create original operator configuration.
 func createOriginalConfiguration() OperatorConfiguration {
 	var cfg = NewOperatorConfiguration()
 	jsonStr := `
@@ -66,24 +73,26 @@ func createOriginalConfiguration() OperatorConfiguration {
 }
 
 func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguration, error) {
-	log.Println("Retrieving configuration from the service")
-
 	address := url + "/api/v1/operator/configuration/" + cluster
 
 	request, err := http.NewRequest("GET", address, nil)
 	if err != nil {
-		log.Println("Error: " + err.Error())
+		klog.Error("Error: " + err.Error())
 		return nil, err
 	}
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		log.Println("Error: " + err.Error())
+		klog.Error("Error: " + err.Error())
 		return nil, err
 	}
 
 	defer response.Body.Close()
 	body, _ := ioutil.ReadAll(response.Body)
+	klog.Info("************ BODY ***************")
+	klog.Info(response.StatusCode)
+	klog.Info(string(body))
+	klog.Info("************ BODY ***************")
 
 	var c2 = NewOperatorConfiguration()
 	c2.fromJSON(body)
@@ -104,7 +113,7 @@ func main() {
 	for {
 		c2, err := retrieveConfigurationFrom(viper.GetString("URL"), viper.GetString("cluster"))
 		if err != nil {
-			log.Println("unable to retrieve configuration from the service")
+			klog.Error("unable to retrieve configuration from the service")
 		} else {
 			c2.print("Retrieved configuration")
 
