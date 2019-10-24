@@ -67,14 +67,18 @@ func (configuration OperatorConfiguration) print(title string) {
 }
 
 // Create original operator configuration.
-func createOriginalConfiguration() OperatorConfiguration {
+func createOriginalConfiguration(filename string) OperatorConfiguration {
+	payload, err := ioutil.ReadFile(filename)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
 	var cfg = NewOperatorConfiguration()
-	jsonStr := `
-{"no_op":"?",
- "foo":"FOO1",
- "bar":"BAR1",
- "watch":[]}`
-	cfg.fromJSON([]byte(jsonStr))
+	err = cfg.fromJSON(payload)
+	if err != nil {
+		klog.Warning("Can not decode original configuration read from the file ", filename)
+		// ok for now, the configuration will be simply empty
+	}
 	return cfg
 }
 
