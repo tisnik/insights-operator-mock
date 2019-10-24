@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"k8s.io/klog"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -52,12 +53,17 @@ func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration
 	}
 }
 
+// Print the configuration. Items are sorted by its keys.
 func (configuration OperatorConfiguration) print(title string) {
 	klog.Info(title)
-	for key, val := range configuration {
-		klog.Info(key, "\t", val)
+	var keys []string
+	for key, _ := range configuration {
+		keys = append(keys, key)
 	}
-	fmt.Println()
+	sort.Strings(keys)
+	for _, key := range keys {
+		klog.Info("\t", key, "\t=> ", configuration[key])
+	}
 }
 
 // Create original operator configuration.
