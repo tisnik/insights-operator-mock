@@ -44,12 +44,26 @@ func (configuration OperatorConfiguration) fromJSON(payload []byte) error {
 	return json.Unmarshal(payload, &configuration)
 }
 
-func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration) {
+func (configuration OperatorConfiguration) addAll(other OperatorConfiguration) {
+	for key, value := range other {
+		configuration[key] = value
+	}
+}
+
+func (configuration OperatorConfiguration) updateExisting(other OperatorConfiguration) {
 	for key, value := range other {
 		_, found := configuration[key]
 		if found {
 			configuration[key] = value
 		}
+	}
+}
+
+func (configuration OperatorConfiguration) mergeWith(other OperatorConfiguration) {
+	if len(configuration) == 0 {
+		configuration.addAll(other)
+	} else {
+		configuration.updateExisting(other)
 	}
 }
 
