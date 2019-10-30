@@ -162,10 +162,14 @@ func StartInstrumentation(serviceUrl string, interval int, clusterName string, c
 func main() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
+
+	// accept configuration provided via environment variables as well
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix("INSIGHTS_OPERATOR")
+
 	err := viper.ReadInConfig()
 	if err != nil {
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
 	StartInstrumentation(viper.GetString("URL"), viper.GetInt("interval"), viper.GetString("cluster"), viper.GetString("configfile"))
-
 }
