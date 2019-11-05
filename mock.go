@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -34,6 +35,20 @@ type OperatorConfiguration map[string]interface{}
 func NewOperatorConfiguration() OperatorConfiguration {
 	return make(map[string]interface{})
 }
+
+type Trigger struct {
+	Id          int    `json:"id"`
+	Type        string `json:"type"`
+	Cluster     string `json:"cluster"`
+	Reason      string `json:"reason"`
+	Link        string `json:"link"`
+	TriggeredAt string `json:"triggered_at"`
+	TriggeredBy string `json:"triggered_by"`
+	Parameters  string `json:"parameters"`
+	Active      int    `json:"active"`
+}
+
+var configurationMutex sync.Mutex
 
 var configuration = NewOperatorConfiguration()
 
@@ -105,28 +120,29 @@ func createOriginalConfiguration(filename string) OperatorConfiguration {
 	return cfg
 }
 
+func performReadRequest(url string) ([]byte, error) {
+	response, err := http.Get(url)
+	if err != nil {
+		klog.Error("Communication error with the server", err)
+		return nil, fmt.Errorf("Communication error with the server %v", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Expected HTTP status 200 OK, got %d", response.StatusCode)
+	}
+	body, readErr := ioutil.ReadAll(response.Body)
+	defer response.Body.Close()
+
+	if readErr != nil {
+		return nil, fmt.Errorf("Unable to read response body")
+	}
+
+	return body, nil
+}
+
 func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguration, error) {
 	address := url + "/api/v1/operator/configuration/" + cluster
 
-	request, err := http.NewRequest("GET", address, nil)
-	if err != nil {
-		klog.Error("Error: " + err.Error())
-		return nil, err
-	}
-
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		klog.Error("Error: " + err.Error())
-		return nil, err
-	}
-
-	if response.StatusCode != http.StatusOK {
-		klog.Info("No configuration has been provided by the service")
-		return nil, nil
-	}
-
-	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := performReadRequest(address)
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +156,27 @@ func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguratio
 	return c2, nil
 }
 
-func StartInstrumentation(serviceUrl string, interval int, clusterName string, configFile string) {
+func retrieveTriggersFrom(url string, cluster string) ([]Trigger, error) {
+	address := url + "/api/v1/operator/triggers/" + cluster
+
+	body, err := performReadRequest(address)
+	if err != nil {
+		return nil, err
+	}
+
+	var triggers []Trigger
+	err = json.Unmarshal(body, &triggers)
+	if err != nil {
+		return nil, err
+	}
+	return triggers, nil
+}
+
+func configurationGoroutine(serviceUrl string, configInterval int, clusterName string, configFile string) {
 	klog.Info("Read original configuration")
 	c1 := createOriginalConfiguration(configFile)
 	c1.print("Original configuration")
-	klog.Info("Gathering configuration each ", interval, " second(s)")
+	klog.Info("Gathering configuration each ", configInterval, " second(s)")
 	for {
 		klog.Info("Gathering info from service ", serviceUrl)
 		c2, err := retrieveConfigurationFrom(serviceUrl, clusterName)
@@ -152,11 +184,41 @@ func StartInstrumentation(serviceUrl string, interval int, clusterName string, c
 			klog.Error("unable to retrieve configuration from the service")
 		} else if c2 != nil {
 			c2.print("Retrieved configuration")
+			configurationMutex.Lock()
 			c1.mergeWith(c2)
+			configurationMutex.Unlock()
 			c1.print("Updated configuration")
 		}
-		time.Sleep(time.Duration(interval) * time.Second)
+		time.Sleep(time.Duration(configInterval) * time.Second)
 	}
+}
+
+func triggerGoroutine(serviceUrl string, triggerInterval int, clusterName string) {
+	klog.Info("Gathering triggers each ", triggerInterval, " second(s)")
+	for {
+		klog.Info("Gathering triggers from service ", serviceUrl)
+		triggers, err := retrieveTriggersFrom(serviceUrl, clusterName)
+		if err != nil {
+			klog.Error("unable to retrieve triggers from the service")
+		} else {
+			klog.Info("Triggers for this operator")
+			for _, trigger := range triggers {
+				klog.Info("\tId: ", trigger.Id)
+				klog.Info("\tType: ", trigger.Type)
+				klog.Info("\tReason: ", trigger.Reason)
+				klog.Info("\tLink: ", trigger.Link)
+				klog.Info("\tTriggered at: ", trigger.TriggeredAt)
+				klog.Info("\tTriggered by: ", trigger.TriggeredBy)
+				klog.Info("\tParameters: ", trigger.Parameters)
+			}
+		}
+		time.Sleep(time.Duration(triggerInterval) * time.Second)
+	}
+}
+
+func StartInstrumentation(serviceUrl string, configInterval int, triggerInterval int, clusterName string, configFile string) {
+	go configurationGoroutine(serviceUrl, configInterval, clusterName, configFile)
+	go triggerGoroutine(serviceUrl, triggerInterval, clusterName)
 }
 
 func main() {
@@ -171,5 +233,8 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
-	StartInstrumentation(viper.GetString("URL"), viper.GetInt("interval"), viper.GetString("cluster"), viper.GetString("configfile"))
+	StartInstrumentation(viper.GetString("URL"), viper.GetInt("config_interval"), viper.GetInt("trigger_interval"),
+		viper.GetString("cluster"), viper.GetString("configfile"))
+	c := make(chan interface{})
+	<-c
 }
