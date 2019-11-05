@@ -36,6 +36,18 @@ func NewOperatorConfiguration() OperatorConfiguration {
 	return make(map[string]interface{})
 }
 
+type Trigger struct {
+	Id          int    `json:"id"`
+	Type        string `json:"type"`
+	Cluster     string `json:"cluster"`
+	Reason      string `json:"reason"`
+	Link        string `json:"link"`
+	TriggeredAt string `json:"triggered_at"`
+	TriggeredBy string `json:"triggered_by"`
+	Parameters  string `json:"parameters"`
+	Active      int    `json:"active"`
+}
+
 var configurationMutex sync.Mutex
 
 var configuration = NewOperatorConfiguration()
@@ -144,6 +156,22 @@ func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguratio
 	return c2, nil
 }
 
+func retrieveTriggersFrom(url string, cluster string) ([]Trigger, error) {
+	address := url + "/api/v1/operator/triggers/" + cluster
+
+	body, err := performReadRequest(address)
+	if err != nil {
+		return nil, err
+	}
+
+	var triggers []Trigger
+	err = json.Unmarshal(body, &triggers)
+	if err != nil {
+		return nil, err
+	}
+	return triggers, nil
+}
+
 func configurationGoroutine(serviceUrl string, configInterval int, clusterName string, configFile string) {
 	klog.Info("Read original configuration")
 	c1 := createOriginalConfiguration(configFile)
@@ -165,8 +193,32 @@ func configurationGoroutine(serviceUrl string, configInterval int, clusterName s
 	}
 }
 
+func triggerGoroutine(serviceUrl string, triggerInterval int, clusterName string) {
+	klog.Info("Gathering triggers each ", triggerInterval, " second(s)")
+	for {
+		klog.Info("Gathering triggers from service ", serviceUrl)
+		triggers, err := retrieveTriggersFrom(serviceUrl, clusterName)
+		if err != nil {
+			klog.Error("unable to retrieve triggers from the service")
+		} else {
+			klog.Info("Triggers for this operator")
+			for _, trigger := range triggers {
+				klog.Info("\tId: ", trigger.Id)
+				klog.Info("\tType: ", trigger.Type)
+				klog.Info("\tReason: ", trigger.Reason)
+				klog.Info("\tLink: ", trigger.Link)
+				klog.Info("\tTriggered at: ", trigger.TriggeredAt)
+				klog.Info("\tTriggered by: ", trigger.TriggeredBy)
+				klog.Info("\tParameters: ", trigger.Parameters)
+			}
+		}
+		time.Sleep(time.Duration(triggerInterval) * time.Second)
+	}
+}
+
 func StartInstrumentation(serviceUrl string, configInterval int, triggerInterval int, clusterName string, configFile string) {
 	go configurationGoroutine(serviceUrl, configInterval, clusterName, configFile)
+	go triggerGoroutine(serviceUrl, triggerInterval, clusterName)
 }
 
 func main() {
