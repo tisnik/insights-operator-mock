@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -34,6 +35,8 @@ type OperatorConfiguration map[string]interface{}
 func NewOperatorConfiguration() OperatorConfiguration {
 	return make(map[string]interface{})
 }
+
+var configurationMutex sync.Mutex
 
 var configuration = NewOperatorConfiguration()
 
@@ -140,11 +143,11 @@ func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguratio
 	return c2, nil
 }
 
-func StartInstrumentation(serviceUrl string, interval int, clusterName string, configFile string) {
+func configurationGoroutine(serviceUrl string, configInterval int, clusterName string, configFile string) {
 	klog.Info("Read original configuration")
 	c1 := createOriginalConfiguration(configFile)
 	c1.print("Original configuration")
-	klog.Info("Gathering configuration each ", interval, " second(s)")
+	klog.Info("Gathering configuration each ", configInterval, " second(s)")
 	for {
 		klog.Info("Gathering info from service ", serviceUrl)
 		c2, err := retrieveConfigurationFrom(serviceUrl, clusterName)
@@ -152,11 +155,17 @@ func StartInstrumentation(serviceUrl string, interval int, clusterName string, c
 			klog.Error("unable to retrieve configuration from the service")
 		} else if c2 != nil {
 			c2.print("Retrieved configuration")
+			configurationMutex.Lock()
 			c1.mergeWith(c2)
+			configurationMutex.Unlock()
 			c1.print("Updated configuration")
 		}
-		time.Sleep(time.Duration(interval) * time.Second)
+		time.Sleep(time.Duration(configInterval) * time.Second)
 	}
+}
+
+func StartInstrumentation(serviceUrl string, configInterval int, triggerInterval int, clusterName string, configFile string) {
+	go configurationGoroutine(serviceUrl, configInterval, clusterName, configFile)
 }
 
 func main() {
@@ -171,5 +180,8 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
-	StartInstrumentation(viper.GetString("URL"), viper.GetInt("interval"), viper.GetString("cluster"), viper.GetString("configfile"))
+	StartInstrumentation(viper.GetString("URL"), viper.GetInt("config_interval"), viper.GetInt("trigger_interval"),
+		viper.GetString("cluster"), viper.GetString("configfile"))
+	c := make(chan interface{})
+	<-c
 }
