@@ -108,28 +108,29 @@ func createOriginalConfiguration(filename string) OperatorConfiguration {
 	return cfg
 }
 
+func performReadRequest(url string) ([]byte, error) {
+	response, err := http.Get(url)
+	if err != nil {
+		klog.Error("Communication error with the server", err)
+		return nil, fmt.Errorf("Communication error with the server %v", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Expected HTTP status 200 OK, got %d", response.StatusCode)
+	}
+	body, readErr := ioutil.ReadAll(response.Body)
+	defer response.Body.Close()
+
+	if readErr != nil {
+		return nil, fmt.Errorf("Unable to read response body")
+	}
+
+	return body, nil
+}
+
 func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguration, error) {
 	address := url + "/api/v1/operator/configuration/" + cluster
 
-	request, err := http.NewRequest("GET", address, nil)
-	if err != nil {
-		klog.Error("Error: " + err.Error())
-		return nil, err
-	}
-
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		klog.Error("Error: " + err.Error())
-		return nil, err
-	}
-
-	if response.StatusCode != http.StatusOK {
-		klog.Info("No configuration has been provided by the service")
-		return nil, nil
-	}
-
-	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := performReadRequest(address)
 	if err != nil {
 		return nil, err
 	}
