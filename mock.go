@@ -192,6 +192,18 @@ func retrieveTriggersFrom(url string, cluster string) ([]Trigger, error) {
 	return triggers, nil
 }
 
+func ackTrigger(url string, cluster string, trigger int) error {
+	address := url + "/api/v1/operator/trigger/" + cluster + "/ack/" + strconv.Itoa(trigger)
+
+	err := performWriteRequest(address, "PUT", nil)
+	if err != nil {
+		klog.Error("unable to ack trigger")
+	} else {
+		klog.Info("trigger has been acked")
+	}
+	return err
+}
+
 func configurationGoroutine(serviceUrl string, configInterval int, clusterName string, configFile string) {
 	klog.Info("Read original configuration")
 	c1 := createOriginalConfiguration(configFile)
@@ -222,14 +234,23 @@ func triggerGoroutine(serviceUrl string, triggerInterval int, clusterName string
 			klog.Error("unable to retrieve triggers from the service")
 		} else {
 			klog.Info("Triggers for this operator")
-			for _, trigger := range triggers {
-				klog.Info("\tId: ", trigger.Id)
-				klog.Info("\tType: ", trigger.Type)
-				klog.Info("\tReason: ", trigger.Reason)
-				klog.Info("\tLink: ", trigger.Link)
-				klog.Info("\tTriggered at: ", trigger.TriggeredAt)
-				klog.Info("\tTriggered by: ", trigger.TriggeredBy)
-				klog.Info("\tParameters: ", trigger.Parameters)
+			if len(triggers) > 0 {
+				for _, trigger := range triggers {
+					klog.Info("\tId: ", trigger.Id)
+					klog.Info("\tType: ", trigger.Type)
+					klog.Info("\tReason: ", trigger.Reason)
+					klog.Info("\tLink: ", trigger.Link)
+					klog.Info("\tTriggered at: ", trigger.TriggeredAt)
+					klog.Info("\tTriggered by: ", trigger.TriggeredBy)
+					klog.Info("\tParameters: ", trigger.Parameters)
+				}
+				klog.Info("Performing triggers and acking them")
+				for _, trigger := range triggers {
+					klog.Info("Acking trigger: ", trigger.Id)
+					ackTrigger(serviceUrl, clusterName, trigger.Id)
+				}
+			} else {
+				klog.Info("\tNone")
 			}
 		}
 		time.Sleep(time.Duration(triggerInterval) * time.Second)
