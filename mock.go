@@ -19,10 +19,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/spf13/viper"
+	"io"
 	"io/ioutil"
 	"k8s.io/klog"
 	"net/http"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -139,6 +141,24 @@ func performReadRequest(url string) ([]byte, error) {
 	return body, nil
 }
 
+func performWriteRequest(url string, method string, payload io.Reader) error {
+	var client http.Client
+
+	request, err := http.NewRequest(method, url, payload)
+	if err != nil {
+		return fmt.Errorf("Error creating request %v", err)
+	}
+
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("Communication error with the server %v", err)
+	}
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated && response.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("Expected HTTP status 200 OK, 201 Created or 202 Accepted, got %d", response.StatusCode)
+	}
+	return nil
+}
+
 func retrieveConfigurationFrom(url string, cluster string) (OperatorConfiguration, error) {
 	address := url + "/api/v1/operator/configuration/" + cluster
 
@@ -172,6 +192,18 @@ func retrieveTriggersFrom(url string, cluster string) ([]Trigger, error) {
 	return triggers, nil
 }
 
+func ackTrigger(url string, cluster string, trigger int) error {
+	address := url + "/api/v1/operator/trigger/" + cluster + "/ack/" + strconv.Itoa(trigger)
+
+	err := performWriteRequest(address, "PUT", nil)
+	if err != nil {
+		klog.Error("unable to ack trigger")
+	} else {
+		klog.Info("trigger has been acked")
+	}
+	return err
+}
+
 func configurationGoroutine(serviceUrl string, configInterval int, clusterName string, configFile string) {
 	klog.Info("Read original configuration")
 	c1 := createOriginalConfiguration(configFile)
@@ -202,14 +234,23 @@ func triggerGoroutine(serviceUrl string, triggerInterval int, clusterName string
 			klog.Error("unable to retrieve triggers from the service")
 		} else {
 			klog.Info("Triggers for this operator")
-			for _, trigger := range triggers {
-				klog.Info("\tId: ", trigger.Id)
-				klog.Info("\tType: ", trigger.Type)
-				klog.Info("\tReason: ", trigger.Reason)
-				klog.Info("\tLink: ", trigger.Link)
-				klog.Info("\tTriggered at: ", trigger.TriggeredAt)
-				klog.Info("\tTriggered by: ", trigger.TriggeredBy)
-				klog.Info("\tParameters: ", trigger.Parameters)
+			if len(triggers) > 0 {
+				for _, trigger := range triggers {
+					klog.Info("\tId: ", trigger.Id)
+					klog.Info("\tType: ", trigger.Type)
+					klog.Info("\tReason: ", trigger.Reason)
+					klog.Info("\tLink: ", trigger.Link)
+					klog.Info("\tTriggered at: ", trigger.TriggeredAt)
+					klog.Info("\tTriggered by: ", trigger.TriggeredBy)
+					klog.Info("\tParameters: ", trigger.Parameters)
+				}
+				klog.Info("Performing triggers and acking them")
+				for _, trigger := range triggers {
+					klog.Info("Acking trigger: ", trigger.Id)
+					ackTrigger(serviceUrl, clusterName, trigger.Id)
+				}
+			} else {
+				klog.Info("\tNone")
 			}
 		}
 		time.Sleep(time.Duration(triggerInterval) * time.Second)
