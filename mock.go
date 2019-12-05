@@ -93,7 +93,7 @@ func (configuration OperatorConfiguration) print(title string) {
 	}
 
 	var keys []string
-	for key, _ := range configuration {
+	for key := range configuration {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
