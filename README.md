@@ -1,5 +1,7 @@
 # Insights operator mock
 
+[Go Report Card](https://goreportcard.com/report/github.com/tisnik/insights-operator-mock)
+
 ## Description
 
 A mock that mimicks selected features of insights operator.
