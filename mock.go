@@ -29,17 +29,18 @@ import (
 	"time"
 )
 
-// An unstructured operator configuration that can contain
-// any data stored under (string) keys.
+// OperatorConfiguration represents an unstructured operator configuration
+// that can contain any data stored under (string) keys.
 type OperatorConfiguration map[string]interface{}
 
-// Constructor for the operator configuration.
+// NewOperatorConfiguration is the implementation of constructor for the operator configuration.
 func NewOperatorConfiguration() OperatorConfiguration {
 	return make(map[string]interface{})
 }
 
+// Trigger represents information about one requests from admin to start must gather or other similar operation
 type Trigger struct {
-	Id          int    `json:"id"`
+	ID          int    `json:"id"`
 	Type        string `json:"type"`
 	Cluster     string `json:"cluster"`
 	Reason      string `json:"reason"`
@@ -204,14 +205,14 @@ func ackTrigger(url string, cluster string, trigger int) error {
 	return err
 }
 
-func configurationGoroutine(serviceUrl string, configInterval int, clusterName string, configFile string) {
+func configurationGoroutine(serviceURL string, configInterval int, clusterName string, configFile string) {
 	klog.Info("Read original configuration")
 	c1 := createOriginalConfiguration(configFile)
 	c1.print("Original configuration")
 	klog.Info("Gathering configuration each ", configInterval, " second(s)")
 	for {
-		klog.Info("Gathering info from service ", serviceUrl)
-		c2, err := retrieveConfigurationFrom(serviceUrl, clusterName)
+		klog.Info("Gathering info from service ", serviceURL)
+		c2, err := retrieveConfigurationFrom(serviceURL, clusterName)
 		if err != nil {
 			klog.Error("unable to retrieve configuration from the service")
 		} else if c2 != nil {
@@ -225,18 +226,18 @@ func configurationGoroutine(serviceUrl string, configInterval int, clusterName s
 	}
 }
 
-func triggerGoroutine(serviceUrl string, triggerInterval int, clusterName string) {
+func triggerGoroutine(serviceURL string, triggerInterval int, clusterName string) {
 	klog.Info("Gathering triggers each ", triggerInterval, " second(s)")
 	for {
-		klog.Info("Gathering triggers from service ", serviceUrl)
-		triggers, err := retrieveTriggersFrom(serviceUrl, clusterName)
+		klog.Info("Gathering triggers from service ", serviceURL)
+		triggers, err := retrieveTriggersFrom(serviceURL, clusterName)
 		if err != nil {
 			klog.Error("unable to retrieve triggers from the service")
 		} else {
 			klog.Info("Triggers for this operator")
 			if len(triggers) > 0 {
 				for _, trigger := range triggers {
-					klog.Info("\tId: ", trigger.Id)
+					klog.Info("\tId: ", trigger.ID)
 					klog.Info("\tType: ", trigger.Type)
 					klog.Info("\tReason: ", trigger.Reason)
 					klog.Info("\tLink: ", trigger.Link)
@@ -246,8 +247,8 @@ func triggerGoroutine(serviceUrl string, triggerInterval int, clusterName string
 				}
 				klog.Info("Performing triggers and acking them")
 				for _, trigger := range triggers {
-					klog.Info("Acking trigger: ", trigger.Id)
-					ackTrigger(serviceUrl, clusterName, trigger.Id)
+					klog.Info("Acking trigger: ", trigger.ID)
+					ackTrigger(serviceURL, clusterName, trigger.ID)
 				}
 			} else {
 				klog.Info("\tNone")
@@ -257,9 +258,10 @@ func triggerGoroutine(serviceUrl string, triggerInterval int, clusterName string
 	}
 }
 
-func StartInstrumentation(serviceUrl string, configInterval int, triggerInterval int, clusterName string, configFile string) {
-	go configurationGoroutine(serviceUrl, configInterval, clusterName, configFile)
-	go triggerGoroutine(serviceUrl, triggerInterval, clusterName)
+// StartInstrumentation start the insigts operator mock goroutines
+func StartInstrumentation(serviceURL string, configInterval int, triggerInterval int, clusterName string, configFile string) {
+	go configurationGoroutine(serviceURL, configInterval, clusterName, configFile)
+	go triggerGoroutine(serviceURL, triggerInterval, clusterName)
 }
 
 func main() {
@@ -272,7 +274,7 @@ func main() {
 
 	err := viper.ReadInConfig()
 	if err != nil {
-		panic(fmt.Errorf("Fatal error config file: %s \n", err))
+		panic(fmt.Errorf("Fatal error config file: %s", err))
 	}
 	StartInstrumentation(viper.GetString("URL"), viper.GetInt("config_interval"), viper.GetInt("trigger_interval"),
 		viper.GetString("cluster"), viper.GetString("configfile"))
