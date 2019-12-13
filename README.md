@@ -27,3 +27,7 @@ Just run the executable file created by `go build`:
 ## Configuration
 
 No further configuration is needed at this moment.
+
+## Contribution
+
+Please look into document [CONTRIBUTING.md](CONTRIBUTING.md) that contains all information about how to contribute to this project.
