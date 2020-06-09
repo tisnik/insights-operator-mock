@@ -31,3 +31,8 @@ No further configuration is needed at this moment.
 ## Contribution
 
 Please look into document [CONTRIBUTING.md](CONTRIBUTING.md) that contains all information about how to contribute to this project.
+
+Please look also at [Definitiot of Done](DoD.md) document with further informations.
+
+Also make sure to run `./test.sh` to check all changes made in the source code.
+
