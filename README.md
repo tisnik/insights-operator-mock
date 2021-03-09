@@ -1,6 +1,7 @@
 # Insights operator mock
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/tisnik/insights-operator-mock)](https://goreportcard.com/report/github.com/tisnik/insights-operator-mock)
+[![License](https://img.shields.io/badge/license-Apache-blue)](https://github.com/RedHatInsights/insights-operator-mock/blob/master/LICENSE)
 
 ## Description
 
