@@ -8,6 +8,8 @@ A mock that mimicks selected features of insights operator.
 
 ## How to build the tool
 
+Go version 1.14 or newer is required to build this tool.
+
 Use the standard Go command:
 
 ```
